@@ -1,0 +1,8 @@
+
+title: "visina"
+author: "ts"
+date: "17 december 2016"
+output_dir: "."
+output:
+  html_document: default
+  word_document: default
