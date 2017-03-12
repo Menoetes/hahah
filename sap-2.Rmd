@@ -1,0 +1,1078 @@
+---
+title: "STATISTICNA OBDELAVA PODATKOV VPLIVA SLANOSTI NA PSENICO"
+author: "Tilen Sever"
+date: "11 march 2017"
+output: 
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    theme: cerulean
+    highlight: pygments
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=FALSE, message=FALSE)
+```
+
+
+Pri predmetu Rast in razvoj rastlin smo izvedli poskus v katerem smo preverjali vpliv slanosti (50, 100 in 200 mM NaCl) na razlicne sorte psenice (le te so Element (El), Euclide (Eu) in Vulcan (Vu)). V 36 lonckov (vsaka sorta trikrat z vsako koncentracijo soli in kontrola) smo posadili 15 semen kar smo kasneje razredcili na 10. Na rastlinah smo merili vec parametrov (masa poganjkov, vsebnost MDA poganjkov, masa korenin, vsebnost MDA korenin, delez klorofila a, delez klorofila b, delez klorofila a in b, transpiracija, dejanska fotokemicna ucinkovitost in potencialna fotokemicna ucinkovitost).
+
+Za predmet Statisticna odbelava podatkov sem pridobljene podatke odelali s pomocjo Rstudia.
+
+#Uvoz podatkov
+Podatke smo zbrali in uredil v MS Excel (zaradi nacina meritev povprecne vrednosti za vsak loncek), ki sem jih nato uvozili v Rstudio. V stoplcih od leve prosti desni so prikazane koncentracije soli (kontrola (K), 200mM, 100mM in 50mM NaCl), sorte (EUCLIDE, ELEMENT in VULCAN), sorta in koncentracija, poganjkov, lipidna peroksidacija, masa korenin, klorofil a, klorofil b, klorofil a+b, transpiracija, dejanska fotokemicna ucinkovitost, potencialna fotokemicna ucinkovitost.
+
+```{r}
+library(readxl)
+
+tabela <- read_excel("C:/Users/Menoetes/Documents/R/rezultati_pšenica_slanost2.xlsx", 
+    sheet = "tabela")
+View(tabela)
+```
+
+Z ukazom `str` si ogledamo Struktura podatkov
+```{r}
+str(data)
+```
+
+z ukazom `summary` pa priklicemo povzetek podatkov, ta nima smisla, saj podatki niso odbravnavani pravilno, R loci med posameznimi merjenimi parametri (stolpci), ne pa tudi med posamznimi sortami, ki se v stolpcih razlikujejo
+
+```{r}
+summary(tabela)
+```
+#Analiza
+
+najprej sem izracunal povprecje za vsako koncentracijo in sorto posebaj (tabela2 ima povprecja, tabela22 je isto, samo ohranjen ima stolpec Vrsta_Kon). S pomocjo `aggregate` zdruzim posamazne koncentracije in vrste v njihovih povprecjih (uporabim `FUN=mean`), rezultat je tabela z povprecji podatkov
+
+```{r, echo=FALSE}
+tabela2 <-aggregate(tabela[,2:11], by=list(tabela$Vrsta_Kon),FUN=mean) #zracunam povprecja podatkov od drugegega stolpca naprej (v prvem ni stevil)
+colnames(tabela2)[1]<-c('Vrsta_Kon') #spremenim ime prve kolone z Group.1
+imena<-as.matrix(1:length(tabela2$Vrsta_Kon)) #naredim matriko, ki je dolga toliko, kolikor so dolgi stolpci v tabela2 (ker so vsi enako dolgi, uporabim stoplpec 'Vrsta_Kon'), dobljena matrika ima vrednosti od 1 do 12, kolikor je vrstic v tabela2
+row.names(imena)<-(c('El_K','El_50','El_100','El_200','Eu_K','Eu_50','Eu_100','Eu_200','Vu_K','Vu_50','Vu_100','Vu_200')) #poimenujem vrstice v matriki 'imena'
+tabela2<-tabela2[match(row.names(imena),tabela2$Vrsta_Kon),]#razporedim vrstice v tabela2, da ustrezajo vrstnemu redu vrstic v imena glede na imena vrstic
+rownames(tabela2)<-c('El_K','El_50','El_100','El_200','Eu_K','Eu_50','Eu_100','Eu_200','Vu_K','Vu_50','Vu_100','Vu_200') #spremenim imena vrstic, da ustrezajo vrsti in koncentraciji, prej so bila imena vrstic samo zaporedna stevila
+tabela22=tabela2#ohranim tabelo, da lahko zaporedje imen vrstic uporabim kasneje
+tabela2$Vrsta_Kon<-NULL #odstranim stolpec Vrsta_Kon, saj nestevilske vrednosti motijo nadalnje reacunanje
+tabela2
+
+```
+
+Nato sem normaliziral podatke za vsako vrsto na njihovo kontrolo tako dobimo odstopanje posameznih tretmajev relativno glede na kontrolno skupino za vsako vrsto psenice posebaj (normtabela2 ima normalizirana povprecja podatkov iz tabela2).
+
+
+```{r, echo=FALSE}
+nEl_K<-tabela2['El_K',]
+nEl_50<-tabela2['El_50', ]/nEl_K
+nEl_100<-tabela2['El_100', ]/nEl_K
+nEl_200<-tabela2['El_200', ]/nEl_K
+nEl_K<-nEl_K/nEl_K
+
+nEu_K<-tabela2['Eu_K',]
+nEu_50<-tabela2['Eu_50',]/nEu_K
+nEu_100<-tabela2['Eu_100',]/nEu_K
+nEu_200<-tabela2['Eu_200',]/nEu_K
+nEu_K<-nEu_K/nEu_K
+
+nVu_K<-tabela2['Vu_K',]
+nVu_50<-tabela2['Vu_50',]/nVu_K
+nVu_100<-tabela2['Vu_100',]/nVu_K
+nVu_200<-tabela2['Vu_200',]/nVu_K
+nVu_K<-nVu_K/nVu_K
+
+normtabela2=matrix(c(nEl_K,nEl_50,nEl_100,nEl_200,nEu_K,nEu_50,nEu_100,nEu_200,nVu_K,nVu_50,nVu_100,nVu_200),nrow=12,ncol=length(nEl_K), byrow=TRUE) #ustvarim matriko z normaliziranimi vrednostmi
+colnames(normtabela2) <- c(colnames(tabela2)) #popravim imena stolpcev
+rownames(normtabela2)<- c(tabela22$Vrsta_Kon) #popravim imena vrstic
+
+normtabela2
+```
+
+Ker R nima funkcije za standardno napako, enacbo za njo shranim kot funkcijo `se`. $$SE_{ \overline{x}} = \frac{s} {\sqrt n}$$ 
+```{r}
+se <- function(x){
+serr <- sd(x)/sqrt(length(x))
+return(serr)
+}
+```
+
+
+Ker nisem uspel normalizirati podatke na kontrolo v 'tabela' lepo in na nacin, ki bi to omogocal z vecjo kolicino podatkov, sem uvozil novo tabelo z normaliziranimi vrednostmi (tabela4 ima normalizirane izvorne podatke).
+```{r}
+library(readxl)
+tabela4<- read_excel("~/R/rezultati_pšenica_slanost2.xlsx", 
+    sheet = "tabela2")
+View(tabela4)
+```
+
+Pridobim standardne napake normaliziraih podatkov v 'tabeloSE', spet uporabim `aggregate`, tokrat z `FUN = se`
+```{r, echo=FALSE}
+tabelaSE <-aggregate(tabela4[,2:11], by=list(tabela4$Vrsta_Kon),FUN=se)
+tabelaSE<-tabelaSE[match(row.names(imena),tabelaSE$Group.1),]
+rownames(tabelaSE)<-c('El_K','El_50','El_100','El_200','Eu_K','Eu_50','Eu_100','Eu_200','Vu_K','Vu_50','Vu_100','Vu_200')
+tabelaSE
+
+```
+
+
+# Izris podatkov za maso poganjkov
+
+##Plot
+
+Najprej sem izrisal crtni graf samo za maso poganjkov, za prvo vrsto sem izrisal graf z pomocjo funkcije `plot`, za ostali dve sem sem narisal vrednosti na isti graf s pomocjo `points`. Standardne napake sem nanesel s pomocjo `segments` in `epsilon`.
+
+```{r}
+x<-c(1:4) #ta vektor uporabim zato, da na x osi dobim samo stiri tocke, ki so enako oddaljene med sabo
+
+el<-normtabela2[c('El_K','El_50','El_100','El_200'),'AVG-masa-pog']
+eu<-normtabela2[c('Eu_K','Eu_50','Eu_100','Eu_200'),'AVG-masa-pog']
+vu<-normtabela2[c('Vu_K','Vu_50','Vu_100','Vu_200'),'AVG-masa-pog']
+#nevem zakaj, amopak zgornje vektorje shrani kot 'list', ker to otezuje nadaljne delo, jih spremenim v numericne vrednosti
+el<-as.numeric(el)
+eu<-as.numeric(eu)
+vu<-as.numeric(vu)
+
+elSE<-tabelaSE[c('El_K','El_50','El_100','El_200'),'norm_MP']
+euSE<-tabelaSE[c('Eu_K','Eu_50','Eu_100','Eu_200'),'norm_MP']
+vuSE<-tabelaSE[c('Vu_K','Vu_50','Vu_100','Vu_200'),'norm_MP']
+#nevem zakaj, ampak slednje tri vektorje z standardnimi napakami zapise kot 'numeric' ze samo po sebi
+plot(x,el, type = 'b', col='blue',ylim=c(0 , 1.4),xlab = 'koncentracija [mM]', ylab = 'relativna masa poganjka (%)',xaxt='n',main = 'Masa poganjkov')
+points(x,eu, type = 'b', col='green')
+points(x,vu, type='b', col='red')
+
+legend(1,0.4 ,col = c('blue', 'green', 'red'), lwd=c(1,1,1),legend=c('El','Eu','Vu'),cex=1)
+
+axis(1, at=x, labels = c(0,50,100,200))
+#z segments in epsilon izrisem se 'error bare' 
+segments(x, el-elSE,x, el+elSE,col='blue')
+epsilon = 0.01 
+segments(x-epsilon,el-elSE,x+epsilon,el-elSE,col='blue')
+segments(x-epsilon,el+elSE,x+epsilon,el+elSE, col='blue')
+
+segments(x, eu-euSE,x, eu+euSE,col='green')
+epsilon = 0.01
+segments(x-epsilon,eu-euSE,x+epsilon,eu-euSE,col='green')
+segments(x-epsilon,eu+euSE,x+epsilon,eu+euSE,col='green')
+
+segments(x, vu-vuSE,x, vu+vuSE,col='red')
+epsilon = 0.01
+segments(x-epsilon,vu-vuSE,x+epsilon,vu-vuSE,col='red')
+segments(x-epsilon,vu+vuSE,x+epsilon,vu+vuSE,col='red')
+```
+
+Po istem kopitu lahko izrisem grafe za vse merjene parametre, rezultat ni idealen; skale na niso enake na vseh grafih, saj razpon vrednosti ni enak, zaradi majhnih slik se tezko razberejo napisi na grafih.
+
+```{r, echo=FALSE, fig.height=8, fig.width=18}
+x<-c(1:4)
+
+par(bty='l',bg='white',mfrow=c(2,5))
+##### MASA POGANJKA #####
+
+el<-normtabela2[c('El_K','El_50','El_100','El_200'),'AVG-masa-pog']
+eu<-normtabela2[c('Eu_K','Eu_50','Eu_100','Eu_200'),'AVG-masa-pog']
+vu<-normtabela2[c('Vu_K','Vu_50','Vu_100','Vu_200'),'AVG-masa-pog']
+
+el<-as.numeric(el)
+eu<-as.numeric(eu)
+vu<-as.numeric(vu)
+
+elSE<-tabelaSE[c('El_K','El_50','El_100','El_200'),'norm_MP']
+euSE<-tabelaSE[c('Eu_K','Eu_50','Eu_100','Eu_200'),'norm_MP']
+vuSE<-tabelaSE[c('Vu_K','Vu_50','Vu_100','Vu_200'),'norm_MP']
+
+plot(x,el, type = 'b', col='blue',ylim=c(0 , 1.4),xlab = 'koncentracija [nM]', ylab = 'relativna masa poganjka (%)',xaxt='n', main = 'Masa poganjkov')
+points(x,eu, type = 'b', col='green')
+points(x,vu, type='b', col='red')
+
+legend(1,0.4 ,col = c('blue', 'green', 'red'), lwd=c(1,1,1),legend=c('El','Eu','Vu'),cex=1)
+
+axis(1, at=x, labels = c(0,50,100,200))
+
+segments(x, el-elSE,x, el+elSE,col='blue')
+epsilon = 0.01 
+segments(x-epsilon,el-elSE,x+epsilon,el-elSE,col='blue')
+segments(x-epsilon,el+elSE,x+epsilon,el+elSE, col='blue')
+
+segments(x, eu-euSE,x, eu+euSE,col='green')
+epsilon = 0.01
+segments(x-epsilon,eu-euSE,x+epsilon,eu-euSE,col='green')
+segments(x-epsilon,eu+euSE,x+epsilon,eu+euSE,col='green')
+
+segments(x, vu-vuSE,x, vu+vuSE,col='red')
+epsilon = 0.01
+segments(x-epsilon,vu-vuSE,x+epsilon,vu-vuSE,col='red')
+segments(x-epsilon,vu+vuSE,x+epsilon,vu+vuSE,col='red')
+
+
+##### MDA POGANJKA #####
+
+
+el<-normtabela2[c('El_K','El_50','El_100','El_200'),'AVG-MDA-pog']
+eu<-normtabela2[c('Eu_K','Eu_50','Eu_100','Eu_200'),'AVG-MDA-pog']
+vu<-normtabela2[c('Vu_K','Vu_50','Vu_100','Vu_200'),'AVG-MDA-pog']
+
+el<-as.numeric(el)
+eu<-as.numeric(eu)
+vu<-as.numeric(vu)
+
+elSE<-tabelaSE[c('El_K','El_50','El_100','El_200'),'norm_MDA_P']
+euSE<-tabelaSE[c('Eu_K','Eu_50','Eu_100','Eu_200'),'norm_MDA_P']
+vuSE<-tabelaSE[c('Vu_K','Vu_50','Vu_100','Vu_200'),'norm_MDA_P']
+
+plot(x,el, type = 'b', col='blue',ylim=c(0 , 2.5),xlab = 'koncentracija [mM]', ylab = 'relativna vsebnost MDA poganjkov (%)',xaxt='n', main = 'lipidna peroksidacija poganjkov')
+points(x,eu, type = 'b', col='green')
+points(x,vu, type='b', col='red')
+
+legend(1,0.6 ,col = c('blue', 'green', 'red'), lwd=c(1,1,1),legend=c('El','Eu','Vu'),cex=1)
+
+axis(1, at=x, labels = c(0,50,100,200))
+
+segments(x, el-elSE,x, el+elSE,col='blue')
+epsilon = 0.01 
+segments(x-epsilon,el-elSE,x+epsilon,el-elSE,col='blue')
+segments(x-epsilon,el+elSE,x+epsilon,el+elSE, col='blue')
+
+segments(x, eu-euSE,x, eu+euSE,col='green')
+epsilon = 0.01
+segments(x-epsilon,eu-euSE,x+epsilon,eu-euSE,col='green')
+segments(x-epsilon,eu+euSE,x+epsilon,eu+euSE,col='green')
+
+segments(x, vu-vuSE,x, vu+vuSE,col='red')
+epsilon = 0.01
+segments(x-epsilon,vu-vuSE,x+epsilon,vu-vuSE,col='red')
+segments(x-epsilon,vu+vuSE,x+epsilon,vu+vuSE,col='red')
+
+##### MASA KORENIN #####
+
+
+el<-normtabela2[c('El_K','El_50','El_100','El_200'),'AVG-masa-korenine']
+eu<-normtabela2[c('Eu_K','Eu_50','Eu_100','Eu_200'),'AVG-masa-korenine']
+vu<-normtabela2[c('Vu_K','Vu_50','Vu_100','Vu_200'),'AVG-masa-korenine']
+
+el<-as.numeric(el)
+eu<-as.numeric(eu)
+vu<-as.numeric(vu)
+
+elSE<-tabelaSE[c('El_K','El_50','El_100','El_200'),'norm_MK']
+euSE<-tabelaSE[c('Eu_K','Eu_50','Eu_100','Eu_200'),'norm_MK']
+vuSE<-tabelaSE[c('Vu_K','Vu_50','Vu_100','Vu_200'),'norm_MK']
+
+plot(x,el, type = 'b', col='blue',ylim=c(0 , 2.5),xlab = 'koncentracija [mM]', ylab = 'relativna masa korenine (%)',xaxt='n', main = 'masa korenine')
+points(x,eu, type = 'b', col='green')
+points(x,vu, type='b', col='red')
+
+legend(1,0.6 ,col = c('blue', 'green', 'red'), lwd=c(1,1,1),legend=c('El','Eu','Vu'),cex=1)
+
+axis(1, at=x, labels = c(0,50,100,200))
+
+segments(x, el-elSE,x, el+elSE,col='blue')
+epsilon = 0.01 
+segments(x-epsilon,el-elSE,x+epsilon,el-elSE,col='blue')
+segments(x-epsilon,el+elSE,x+epsilon,el+elSE, col='blue')
+
+segments(x, eu-euSE,x, eu+euSE,col='green')
+epsilon = 0.01
+segments(x-epsilon,eu-euSE,x+epsilon,eu-euSE,col='green')
+segments(x-epsilon,eu+euSE,x+epsilon,eu+euSE,col='green')
+
+segments(x, vu-vuSE,x, vu+vuSE,col='red')
+epsilon = 0.01
+segments(x-epsilon,vu-vuSE,x+epsilon,vu-vuSE,col='red')
+segments(x-epsilon,vu+vuSE,x+epsilon,vu+vuSE,col='red')
+
+##### MDA KORENINE #####
+
+el<-normtabela2[c('El_K','El_50','El_100','El_200'),'AVG-MDA-korenine']
+eu<-normtabela2[c('Eu_K','Eu_50','Eu_100','Eu_200'),'AVG-MDA-korenine']
+vu<-normtabela2[c('Vu_K','Vu_50','Vu_100','Vu_200'),'AVG-MDA-korenine']
+
+el<-as.numeric(el)
+eu<-as.numeric(eu)
+vu<-as.numeric(vu)
+
+elSE<-tabelaSE[c('El_K','El_50','El_100','El_200'),'norm_MDA_K']
+euSE<-tabelaSE[c('Eu_K','Eu_50','Eu_100','Eu_200'),'norm_MDA_K']
+vuSE<-tabelaSE[c('Vu_K','Vu_50','Vu_100','Vu_200'),'norm_MDA_K']
+
+plot(x,el, type = 'b', col='blue',ylim=c(0 , 2.8),xlab = 'koncentracija [mM]', ylab = 'relativna vsebnost MDA korenin (%)',xaxt='n', main = 'lipidna peroksidacija korenin')
+points(x,eu, type = 'b', col='green')
+points(x,vu, type='b', col='red')
+
+legend(1,0.6 ,col = c('blue', 'green', 'red'), lwd=c(1,1,1),legend=c('El','Eu','Vu'),cex=1)
+
+axis(1, at=x, labels = c(0,50,100,200))
+
+segments(x, el-elSE,x, el+elSE,col='blue')
+epsilon = 0.01 
+segments(x-epsilon,el-elSE,x+epsilon,el-elSE,col='blue')
+segments(x-epsilon,el+elSE,x+epsilon,el+elSE, col='blue')
+
+segments(x, eu-euSE,x, eu+euSE,col='green')
+epsilon = 0.01
+segments(x-epsilon,eu-euSE,x+epsilon,eu-euSE,col='green')
+segments(x-epsilon,eu+euSE,x+epsilon,eu+euSE,col='green')
+
+segments(x, vu-vuSE,x, vu+vuSE,col='red')
+epsilon = 0.01
+segments(x-epsilon,vu-vuSE,x+epsilon,vu-vuSE,col='red')
+segments(x-epsilon,vu+vuSE,x+epsilon,vu+vuSE,col='red')
+
+##### KLOROFIL A #####
+
+el<-normtabela2[c('El_K','El_50','El_100','El_200'),'X(Chl a) [mg/g]']
+eu<-normtabela2[c('Eu_K','Eu_50','Eu_100','Eu_200'),'X(Chl a) [mg/g]']
+vu<-normtabela2[c('Vu_K','Vu_50','Vu_100','Vu_200'),'X(Chl a) [mg/g]']
+
+el<-as.numeric(el)
+eu<-as.numeric(eu)
+vu<-as.numeric(vu)
+
+elSE<-tabelaSE[c('El_K','El_50','El_100','El_200'),'Chla_Qorm']
+euSE<-tabelaSE[c('Eu_K','Eu_50','Eu_100','Eu_200'),'Chla_Qorm']
+vuSE<-tabelaSE[c('Vu_K','Vu_50','Vu_100','Vu_200'),'Chla_Qorm']
+
+plot(x,el, type = 'b', col='blue',ylim=c(0 , 1.4),xlab = 'koncentracija [mM]', ylab = 'Delez Chl a (%)',xaxt='n', main = 'Chl a')
+points(x,eu, type = 'b', col='green')
+points(x,vu, type='b', col='red')
+
+legend(1,0.4 ,col = c('blue', 'green', 'red'), lwd=c(1,1,1),legend=c('El','Eu','Vu'),cex=1)
+
+axis(1, at=x, labels = c(0,50,100,200))
+
+segments(x, el-elSE,x, el+elSE,col='blue')
+epsilon = 0.01 
+segments(x-epsilon,el-elSE,x+epsilon,el-elSE,col='blue')
+segments(x-epsilon,el+elSE,x+epsilon,el+elSE, col='blue')
+
+segments(x, eu-euSE,x, eu+euSE,col='green')
+epsilon = 0.01
+segments(x-epsilon,eu-euSE,x+epsilon,eu-euSE,col='green')
+segments(x-epsilon,eu+euSE,x+epsilon,eu+euSE,col='green')
+
+segments(x, vu-vuSE,x, vu+vuSE,col='red')
+epsilon = 0.01
+segments(x-epsilon,vu-vuSE,x+epsilon,vu-vuSE,col='red')
+segments(x-epsilon,vu+vuSE,x+epsilon,vu+vuSE,col='red')
+
+##### KLOROFIL B #####
+
+el<-normtabela2[c('El_K','El_50','El_100','El_200'),'X(Chl b) [mg/g]']
+eu<-normtabela2[c('Eu_K','Eu_50','Eu_100','Eu_200'),'X(Chl b) [mg/g]']
+vu<-normtabela2[c('Vu_K','Vu_50','Vu_100','Vu_200'),'X(Chl b) [mg/g]']
+
+el<-as.numeric(el)
+eu<-as.numeric(eu)
+vu<-as.numeric(vu)
+
+elSE<-tabelaSE[c('El_K','El_50','El_100','El_200'),'Chlb_norm']
+euSE<-tabelaSE[c('Eu_K','Eu_50','Eu_100','Eu_200'),'Chlb_norm']
+vuSE<-tabelaSE[c('Vu_K','Vu_50','Vu_100','Vu_200'),'Chlb_norm']
+
+plot(x,el, type = 'b', col='blue',ylim=c(0 , 1.4),xlab = 'koncentracija [mM]', ylab = 'Delez Chl b (%)',xaxt='n', main = 'Chl b')
+points(x,eu, type = 'b', col='green')
+points(x,vu, type='b', col='red')
+
+legend(1,0.4 ,col = c('blue', 'green', 'red'), lwd=c(1,1,1),legend=c('El','Eu','Vu'),cex=1)
+
+axis(1, at=x, labels = c(0,50,100,200))
+
+segments(x, el-elSE,x, el+elSE,col='blue')
+epsilon = 0.01 
+segments(x-epsilon,el-elSE,x+epsilon,el-elSE,col='blue')
+segments(x-epsilon,el+elSE,x+epsilon,el+elSE, col='blue')
+
+segments(x, eu-euSE,x, eu+euSE,col='green')
+epsilon = 0.01
+segments(x-epsilon,eu-euSE,x+epsilon,eu-euSE,col='green')
+segments(x-epsilon,eu+euSE,x+epsilon,eu+euSE,col='green')
+
+segments(x, vu-vuSE,x, vu+vuSE,col='red')
+epsilon = 0.01
+segments(x-epsilon,vu-vuSE,x+epsilon,vu-vuSE,col='red')
+segments(x-epsilon,vu+vuSE,x+epsilon,vu+vuSE,col='red')
+
+
+##### KLOROFIL A + B #####
+
+el<-normtabela2[c('El_K','El_50','El_100','El_200'),'X (Chl a+b) [mg/g]']
+eu<-normtabela2[c('Eu_K','Eu_50','Eu_100','Eu_200'),'X (Chl a+b) [mg/g]']
+vu<-normtabela2[c('Vu_K','Vu_50','Vu_100','Vu_200'),'X (Chl a+b) [mg/g]']
+
+el<-as.numeric(el)
+eu<-as.numeric(eu)
+vu<-as.numeric(vu)
+
+elSE<-tabelaSE[c('El_K','El_50','El_100','El_200'),'Sk_Chl_norm']
+euSE<-tabelaSE[c('Eu_K','Eu_50','Eu_100','Eu_200'),'Sk_Chl_norm']
+vuSE<-tabelaSE[c('Vu_K','Vu_50','Vu_100','Vu_200'),'Sk_Chl_norm']
+
+plot(x,el, type = 'b', col='blue',ylim=c(0 , 1.4),xlab = 'koncentracija [mM]', ylab = 'Delez Chl a+b (%)',xaxt='n', main = 'Chl a+b')
+points(x,eu, type = 'b', col='green')
+points(x,vu, type='b', col='red')
+
+legend(1,0.4 ,col = c('blue', 'green', 'red'), lwd=c(1,1,1),legend=c('El','Eu','Vu'),cex=1)
+
+axis(1, at=x, labels = c(0,50,100,200))
+
+segments(x, el-elSE,x, el+elSE,col='blue')
+epsilon = 0.01 
+segments(x-epsilon,el-elSE,x+epsilon,el-elSE,col='blue')
+segments(x-epsilon,el+elSE,x+epsilon,el+elSE, col='blue')
+
+segments(x, eu-euSE,x, eu+euSE,col='green')
+epsilon = 0.01
+segments(x-epsilon,eu-euSE,x+epsilon,eu-euSE,col='green')
+segments(x-epsilon,eu+euSE,x+epsilon,eu+euSE,col='green')
+
+segments(x, vu-vuSE,x, vu+vuSE,col='red')
+epsilon = 0.01
+segments(x-epsilon,vu-vuSE,x+epsilon,vu-vuSE,col='red')
+segments(x-epsilon,vu+vuSE,x+epsilon,vu+vuSE,col='red')
+
+##### TRANSPIRACIJA #####
+
+
+el<-normtabela2[c('El_K','El_50','El_100','El_200'),'AVG-transpiracija']
+eu<-normtabela2[c('Eu_K','Eu_50','Eu_100','Eu_200'),'AVG-transpiracija']
+vu<-normtabela2[c('Vu_K','Vu_50','Vu_100','Vu_200'),'AVG-transpiracija']
+
+el<-as.numeric(el)
+eu<-as.numeric(eu)
+vu<-as.numeric(vu)
+
+elSE<-tabelaSE[c('El_K','El_50','El_100','El_200'),'Transp_norm']
+euSE<-tabelaSE[c('Eu_K','Eu_50','Eu_100','Eu_200'),'Transp_norm']
+vuSE<-tabelaSE[c('Vu_K','Vu_50','Vu_100','Vu_200'),'Transp_norm']
+
+plot(x,el, type = 'b', col='blue',ylim=c(0 , 1.4),xlab = 'koncentracija [mM]', ylab = 'relativna transpiracija (%)',xaxt='n', main = 'transpiracija')
+points(x,eu, type = 'b', col='green')
+points(x,vu, type='b', col='red')
+
+legend(1,0.4 ,col = c('blue', 'green', 'red'), lwd=c(1,1,1),legend=c('El','Eu','Vu'),cex=1)
+
+axis(1, at=x, labels = c(0,50,100,200))
+
+segments(x, el-elSE,x, el+elSE,col='blue')
+epsilon = 0.01 
+segments(x-epsilon,el-elSE,x+epsilon,el-elSE,col='blue')
+segments(x-epsilon,el+elSE,x+epsilon,el+elSE, col='blue')
+
+segments(x, eu-euSE,x, eu+euSE,col='green')
+epsilon = 0.01
+segments(x-epsilon,eu-euSE,x+epsilon,eu-euSE,col='green')
+segments(x-epsilon,eu+euSE,x+epsilon,eu+euSE,col='green')
+
+segments(x, vu-vuSE,x, vu+vuSE,col='red')
+epsilon = 0.01
+segments(x-epsilon,vu-vuSE,x+epsilon,vu-vuSE,col='red')
+segments(x-epsilon,vu+vuSE,x+epsilon,vu+vuSE,col='red')
+
+
+##### DEJANSKA FOTOKEMICNA AKTIVNOST #####
+
+
+el<-normtabela2[c('El_K','El_50','El_100','El_200'),'AVG-dejanska_foto_aktivnost']
+eu<-normtabela2[c('Eu_K','Eu_50','Eu_100','Eu_200'),'AVG-dejanska_foto_aktivnost']
+vu<-normtabela2[c('Vu_K','Vu_50','Vu_100','Vu_200'),'AVG-dejanska_foto_aktivnost']
+
+el<-as.numeric(el)
+eu<-as.numeric(eu)
+vu<-as.numeric(vu)
+
+elSE<-tabelaSE[c('El_K','El_50','El_100','El_200'),'norm_AVG_dejanska_foto_aktivnost']
+euSE<-tabelaSE[c('Eu_K','Eu_50','Eu_100','Eu_200'),'norm_AVG_dejanska_foto_aktivnost']
+vuSE<-tabelaSE[c('Vu_K','Vu_50','Vu_100','Vu_200'),'norm_AVG_dejanska_foto_aktivnost']
+
+plot(x,el, type = 'b', col='blue',ylim=c(0.9 , 1.1),xlab = 'koncentracija [mM]', ylab = 'relativna ucinkovitost dejanske fotosintetske aktivnosti (%)',xaxt='n', main = 'dejanska fotosintetska aktivnost')
+points(x,eu, type = 'b', col='green')
+points(x,vu, type='b', col='red')
+
+legend(1,0.96 ,col = c('blue', 'green', 'red'), lwd=c(1,1,1),legend=c('El','Eu','Vu'),cex=1)
+
+axis(1, at=x, labels = c(0,50,100,200))
+
+segments(x, el-elSE,x, el+elSE,col='blue')
+epsilon = 0.01 
+segments(x-epsilon,el-elSE,x+epsilon,el-elSE,col='blue')
+segments(x-epsilon,el+elSE,x+epsilon,el+elSE, col='blue')
+
+segments(x, eu-euSE,x, eu+euSE,col='green')
+epsilon = 0.01
+segments(x-epsilon,eu-euSE,x+epsilon,eu-euSE,col='green')
+segments(x-epsilon,eu+euSE,x+epsilon,eu+euSE,col='green')
+
+segments(x, vu-vuSE,x, vu+vuSE,col='red')
+epsilon = 0.01
+segments(x-epsilon,vu-vuSE,x+epsilon,vu-vuSE,col='red')
+segments(x-epsilon,vu+vuSE,x+epsilon,vu+vuSE,col='red')
+
+##### POTENCIALNA FOTOKEMICNA AKTIVNOST #####
+
+
+el<-normtabela2[c('El_K','El_50','El_100','El_200'),'AVG-potencialna_foto_aktivnost']
+eu<-normtabela2[c('Eu_K','Eu_50','Eu_100','Eu_200'),'AVG-potencialna_foto_aktivnost']
+vu<-normtabela2[c('Vu_K','Vu_50','Vu_100','Vu_200'),'AVG-potencialna_foto_aktivnost']
+
+el<-as.numeric(el)
+eu<-as.numeric(eu)
+vu<-as.numeric(vu)
+
+elSE<-tabelaSE[c('El_K','El_50','El_100','El_200'),'norm_AVG-potencialna_foto_aktivnost']
+euSE<-tabelaSE[c('Eu_K','Eu_50','Eu_100','Eu_200'),'norm_AVG-potencialna_foto_aktivnost']
+vuSE<-tabelaSE[c('Vu_K','Vu_50','Vu_100','Vu_200'),'norm_AVG-potencialna_foto_aktivnost']
+
+plot(x,el, type = 'b', col='blue',ylim=c(0.9 , 1.1),xlab = 'koncentracija [mM]', ylab = 'relativna ucinkovitost potencialne fotosintetske aktivnosti (%)',xaxt='n', main = 'potencialna fotosintetska aktivnost')
+points(x,eu, type = 'b', col='green')
+points(x,vu, type='b', col='red')
+
+legend(1,0.96 ,col = c('blue', 'green', 'red'), lwd=c(1,1,1),legend=c('El','Eu','Vu'),cex=1)
+
+axis(1, at=x, labels = c(0,50,100,200))
+
+segments(x, el-elSE,x, el+elSE,col='blue')
+epsilon = 0.01 
+segments(x-epsilon,el-elSE,x+epsilon,el-elSE,col='blue')
+segments(x-epsilon,el+elSE,x+epsilon,el+elSE, col='blue')
+
+segments(x, eu-euSE,x, eu+euSE,col='green')
+epsilon = 0.01
+segments(x-epsilon,eu-euSE,x+epsilon,eu-euSE,col='green')
+segments(x-epsilon,eu+euSE,x+epsilon,eu+euSE,col='green')
+
+segments(x, vu-vuSE,x, vu+vuSE,col='red')
+epsilon = 0.01
+segments(x-epsilon,vu-vuSE,x+epsilon,vu-vuSE,col='red')
+segments(x-epsilon,vu+vuSE,x+epsilon,vu+vuSE,col='red')
+
+```
+
+##Boxplot
+
+ustvarim boxplot za normalizirano maso poganjkov, s tem prikazom vidimo razlike v porazdelitvi podatkov, roza crta pri y=1 ponazarja kontrolo, tako lepo vidimo odstopanje vsakega tretmaja od slednje. Vsaka sorta je oznacena za svojo barvo za lazje razlikovanje.
+```{r, echo=FALSE, fig.height=5, fig.width=12}
+kontrole<-c(grep('El_K',tabela4$Vrsta_Kon),grep('Eu_K',tabela4$Vrsta_Kon),grep('Vu_K',tabela4$Vrsta_Kon))#naredim novo tabelo brez kontrolnih vrednosti
+tabela44<-tabela4[-kontrole,]
+#tabela44
+
+tabela44$Vrsta_Kon = factor(tabela44$Vrsta_Kon,c('El_50','El_100','El_200','Eu_50','Eu_100','Eu_200','Vu_50','Vu_100','Vu_200')) # s tem so podatki v boxplotu razporejeni v zeljenem vrstnem redu
+
+colors = c(rep("blue",3),rep("green",3),rep("red",3))
+
+boxplot(tabela44$norm_MP ~ tabela44$Vrsta_Kon, col=colors,main = 'masa poganjkov',outer = TRUE,ylab='relativna masa poganjkov (%)')
+abline(h=1,lwd=2, col=54)
+legend('bottomleft' ,col = c('blue', 'green', 'red'), lwd=c(2,2,2),legend=c('El','Eu','Vu'),cex = 1)
+
+```
+
+Enako kot zgoraj, izrisem se boxplote za vse ostale parametre, legenda je prikazana samo na prvem grafu.
+```{r, echo=FALSE, fig.height=15, fig.width=30}
+par(mfrow=c(2,5))
+
+boxplot(tabela44$norm_MP ~ tabela44$Vrsta_Kon,col=colors,main = 'masa poganjkov', ylab='relativna masa poganjkov (%)')
+abline(h=1,lwd=2, col=54)
+legend('bottomleft' ,col = c('blue', 'green', 'red'), lwd=c(2,2,2),legend=c('El','Eu','Vu'),cex = 3)
+boxplot(tabela44$norm_MDA_P ~ tabela44$Vrsta_Kon,col=colors,main = 'MDA poganjkov', ylab='relativna vsebnost MDA poganjkov (%)')
+abline(h=1,lwd=2, col=54)
+boxplot(tabela44$norm_MK ~ tabela44$Vrsta_Kon,col=colors,main = 'masa korenin', ylab='relativna masa korenin (%)')
+abline(h=1,lwd=2, col=54)
+boxplot(tabela44$norm_MDA_K ~ tabela44$Vrsta_Kon,col=colors,main = 'MDA korenin',ylab='relativna vsebnost MDA korenin (%)')
+abline(h=1,lwd=2, col=54)
+boxplot(tabela44$Chla_Qorm ~ tabela44$Vrsta_Kon,col=colors,main = 'klorofil a', ylab='relativen delez klorofila a (%)')
+abline(h=1,lwd=2, col=54)
+boxplot(tabela44$Chlb_norm ~ tabela44$Vrsta_Kon,col=colors,main = 'klorofil b', ylab='relativen delez klorofila b (%)')
+abline(h=1,lwd=2, col=54)
+boxplot(tabela44$Sk_Chl_norm ~ tabela44$Vrsta_Kon,col=colors,main = 'klorofil a+b', ylab='relativen delez klorofila a+b (%)')
+abline(h=1,lwd=2, col=54)
+boxplot(tabela44$Transp_norm ~ tabela44$Vrsta_Kon,col=colors,main = 'transpiracija', ylab='relativna transpiracija (%)')
+abline(h=1,lwd=2, col=54)
+boxplot(tabela44$norm_AVG_dejanska_foto_aktivnost ~ tabela44$Vrsta_Kon,col=colors,main = 'dejanska fotokemicna ucinkovitost', ylab='relativna dejanska fotokemicna ucinkovitost (%)')
+abline(h=1,lwd=2, col=54)
+boxplot(tabela44$`norm_AVG-potencialna_foto_aktivnost` ~ tabela44$Vrsta_Kon,col=colors,main = 'potencialna fotokemicna ucinkovitost',ylab='relativna potencialna fotokemicna ucinkovitost (%)')
+abline(h=1,lwd=2, col=54)
+```
+
+#Analiza variance
+
+Z analizo variance preverimo, ce so primerjane skupine podatkov (njihova povprecja) statisticno znacilo razlicne (ce so povprecja enaka ali ne).
+
+Najprej ustvarim nov data.frame, v kterem locim konentracije in vrste.
+```{r}
+tabela444<-as.data.frame(tabela4)
+
+u<-with(tabela444,strsplit(as.character(Vrsta_Kon), "_")) #with zacasno attacha 
+u<-unlist(u)
+vrsta<-u[seq(1,length(u),by=2)] #vzame vsakega drugega, da dobimo vrste
+kon<-u[seq(2,length(u),by=2)] #vzame vsakega drugega da bobimo koncentracije  
+#vrsta
+#kon
+
+tabela444$vrsta=vrsta #na tabela444 dodam stoplec z imenom 'vrsta' z vrednostmi iz 'vrsta'
+tabela444$kon=kon #isto koz zgoraj, samo za koncentracijo
+#tabela444
+```
+
+
+
+```{r}
+aov1=aov(norm_MP ~ kon * vrsta ,tabela444[tabela444$kon!="K",])
+summary(aov1)
+```
+##Post hoc test
+
+Z post hoc testom preverimo razmerja med skupinami, ki bi drugace ostana neopazena ([Post hoc analysis](https://en.wikipedia.org/wiki/Post_hoc_analysis)) glede na dani \alpha (v mojem primeru \alpha = 0.05). Naredil sem post hoc test za maso poganjkov. Duncanov test je posebaj popularen v agronomiji.
+```{r, include=FALSE}
+library(agricolae)
+```
+
+```{r}
+model<-aov(norm_MP ~ Vrsta_Kon, data = tabela444)
+comparison<-duncan.test(model,'Vrsta_Kon',main='hahah')
+duncan.test(model,'Vrsta_Kon', alpha = 0.05, console=TRUE)
+```
+
+
+Z `interaction.plot` R samodejno izrise crtne grafe, rezultat je podoben kot sem storil ze zgoraj, vendar je pot do njega veliko enostavnejsa.
+
+```{r}
+tabela444$kon <- factor(tabela444$kon,levels=c("K","50","100","200")) #prerazporedim tabela444 da bo izrisann graf v zeljenem vrstnem redu
+
+with(tabela444,
+
+interaction.plot(kon,vrsta, norm_MP))
+```
+
+#Normalnost razporeditve podatkov
+
+
+Normalnost porazdelitve podatkov sem preveril z Shapirovim testom, ce je p < 0.05 pomeni da porazdelitev ni normalna, graficno jo prikazemo z QQ grafom, ce bi bila porazdelitev normalna, bi se podatki ujemali z linearno crto na grafu. 
+
+```{r, include=FALSE}
+library(mvnormtest)
+```
+
+Razporeditev podatkov sem preveril z Shapiro–Wilk testom pri vseh merjenih parametrih in poiskal tiste, pri katerih je mormalna. Ce je vrednost p nizja od izbrane vrednosti \alpha lahko zavrnemo nicto hipotezo, da so podatki razporejeni normalno, ce je p visji, sorejmemo alternativno hipotezo, da so podatki normalno razporejeni.
+```{r, echo=FALSE}
+u<-c(
+shapiro.test(tabela444$norm_MP),
+shapiro.test(tabela444$norm_MDA_P),
+shapiro.test(tabela444$norm_MK),
+shapiro.test(tabela444$norm_MDA_K),
+shapiro.test(tabela444$Chla_Qorm),
+shapiro.test(tabela444$Chlb_norm),
+shapiro.test(tabela444$Sk_Chl_norm),
+shapiro.test(tabela444$Transp_norm),
+shapiro.test(tabela444$norm_AVG_dejanska_foto_aktivnost),
+shapiro.test(tabela444[,'norm_AVG-potencialna_foto_aktivnost'])) #shapiro teste za vsak merjen parameter spravim v vektor, shrani se kot 'list9
+
+u<-as.data.frame(u) #u spremenim v data.frame
+
+p<-u[seq(2, length(u),by=4)] #shapiro test prikaze tudi W in imena parametrov, v vektor p spravim samo p vrednosti
+pp<-colnames(p) # v vektor pp spravim samo imena stolpcev z p vrednostmi iz p
+uu<-p>= 0.05 # v vektor uu preverim katere p vrednosti so vecje od 0.05, kar pomeni, da je razdelitev verjetno normalna
+uuu<-grep('TRUE',uu) #u uuu spravum samo tiste, ki so vecji od 0.05
+p[uuu] #in jih izpisem, vidim da so to p vrednosti 2 , 7 in 8
+
+u[c('data.name.2','data.name.7','data.name.8')] #poiscem katerim parametrom pripadajo slednje p vrednosti, to so norm_MK, Transp_norm in norm_AVG_dejanska_foto_aktivnost, pri teh treh naj bi bila porazdelitev normalna
+
+
+```
+prikaz normalnosti razporeditve podatkov z QQ grafom (z funkcijama `qqnorm` in `qqline`), prvi graf prikazuje porazdelitev za maso poganjkov, ki je primer nenormalne porazdelitve, druga dva, za maso korenin in transpiracijo, sta primer normalne razporeditve podatkov, ceprav moram reci, da sam ne zaznam velike razlike med obema primeroma glede na graf.
+
+```{r, fig.height=5, fig.width=15}
+par(mfrow=c(1,3))
+qqnorm(tabela444[,'norm_MP'],main = 'masa poganjkov'); qqline(tabela444$norm_MP)
+qqnorm(tabela444[,'norm_MK'],main = 'masa korenin'); qqline(tabela444$norm_MK)
+qqnorm(tabela444[,'Transp_norm'],main = 'transpiracija'); qqline(tabela444$Transp_norm)
+```
+
+#Homogenost variance
+
+
+z Bartlett-ovim in Figner-Killeen-jevim testom preverim enakost varianc skupin, nicna hipoteza je da so variance enake, alternativna, da niso. Bartlettov je parametricen, ki je primeren za podatke z neko specificno razporeditvijo, Fignerjev test je neparametricni in je bolj primern za podatke, ki nimajo neke dolocene razporeditve, Levenov test gleda mediano, zato je bolj robusten za nenormalo razporejene podatke. Za moje podatke se mi zdi Barlettov test manj primeren ker nimam normalne distribucije podatkov.
+
+```{r, include=FALSE}
+library(lattice)
+library(Rmpfr)
+library(HH)
+library(lawstat)
+```
+
+Homogenost varianc za maso poganjkov
+```{r}
+# Bartlett Test of Homogeneity of Variances
+bartlett.test(norm_MP~Vrsta_Kon, data=tabela444)
+
+# Figner-Killeen Test of Homogeneity of Variances
+fligner.test(norm_MP~Vrsta_Kon, data=tabela44)
+
+#Brown-Forsyth Test of Homogeneity of Variances
+hov(norm_MP~Vrsta_Kon, data=tabela444)
+
+
+#Levene Test of Homogeneity of Variances
+levene.test(tabela444$norm_MP, tabela444$Vrsta_Kon)
+```
+
+
+Homogenost varianc za maso korenin
+```{r}
+# Bartlett Test of Homogeneity of Variances
+bartlett.test(norm_MK~Vrsta_Kon, data=tabela444)
+
+# Figner-Killeen Test of Homogeneity of Variances
+fligner.test(norm_MK~Vrsta_Kon, data=tabela44)
+
+#Brown-Forsyth Test of Homogeneity of Variances
+hov(norm_MK~Vrsta_Kon, data=tabela444)
+
+#Levene Test of Homogeneity of Variances
+levene.test(tabela444$norm_MK, tabela444$Vrsta_Kon)
+```
+Prikazana sta primera za maso korenin in maso poganjkov, glede na Fligner-Killeen in  Brown-Forsyth test variance niso iste. Ne glede na izbran parameter je rezultat Barlettovega testa vedno enak (p-value < 2.2e-16), zato je verjetno nekaj narobe in mu v mojem primeru ne gre zaupati.
+
+Spodaj sem s pomocjo `hovPlotBF` in `hovPlot` se graficno prikazal test za homogenost varianc, v prvem triu boxplotov za maso poganjkov v spodnjem pa za maso korenin. Na slikah je od leve proti desni prikazano: podatki (y), podatki z odsteto mediano (y-med(y)) in absolutna deviacija od mediane (and(y-med(y))).
+
+```{r, fig.height=5, fig.width=15}
+# Homogeneity of Variance Plot
+
+hov(norm_MP~Vrsta_Kon, data=tabela44)#uporabim tabelo 44 kr nima kontrol, kr so itak 1
+hovplotBF(norm_MP~Vrsta_Kon, data=tabela44)
+hovPlot(norm_MK~Vrsta_Kon, data=tabela44)
+```
+
+#Transformacija podatkov
+
+Podatke transformiramo z namenom, da dosezemo normalnost razporeditve pred nadalnjo obdelavo (npr. ANOVA). Sam za te namene nisem uporabil transformiranih podatkov, to sem storil zato, da si ogledam kako transformacija deluje. Preizkusil sem vec oblik transformacije; logaritemsko (z osnovami 10, 2 in naravnim), kvadratni koren in z-transformacijo.
+
+```{r}
+sqrt_tabela4 <- sqrt(tabela4[,2:11])
+sqrt_tabela4<-cbind(tabela4$Vrsta_Kon,sqrt_tabela4)
+colnames (sqrt_tabela4) <- (c('Vrsta_Kon','norm_MP','norm_MDA_P', 'norm_MK','norm_MDA_K','Chla_Qorm','Chlb_norm','Sk_Chl_norm','Transp_norm','norm_AVG_dejanska_foto_aktivnost','norm_AVG-potencialna_foto_aktivnost'))
+#sqrt_tabela4
+```
+
+```{r}
+log_tabela4 <- log(tabela4[,2:11])
+log_tabela4<-cbind(tabela4$Vrsta_Kon,log_tabela4)
+colnames (log_tabela4) <- (c('Vrsta_Kon','norm_MP','norm_MDA_P', 'norm_MK','norm_MDA_K','Chla_Qorm','Chlb_norm','Sk_Chl_norm','Transp_norm','norm_AVG_dejanska_foto_aktivnost','norm_AVG-potencialna_foto_aktivnost'))
+#log_tabela4
+```
+
+```{r}
+log10_tabela4 <- log10(tabela4[,2:11])
+log10_tabela4<-cbind(tabela4$Vrsta_Kon,log10_tabela4)
+colnames (log10_tabela4) <- (c('Vrsta_Kon','norm_MP','norm_MDA_P', 'norm_MK','norm_MDA_K','Chla_Qorm','Chlb_norm','Sk_Chl_norm','Transp_norm','norm_AVG_dejanska_foto_aktivnost','norm_AVG-potencialna_foto_aktivnost'))
+#log10_tabela4
+```
+
+```{r}
+log2_tabela4 <- log2(tabela4[,2:11])
+log2_tabela4<-cbind(tabela4$Vrsta_Kon,log2_tabela4)
+colnames (log2_tabela4) <- (c('Vrsta_Kon','norm_MP','norm_MDA_P', 'norm_MK','norm_MDA_K','Chla_Qorm','Chlb_norm','Sk_Chl_norm','Transp_norm','norm_AVG_dejanska_foto_aktivnost','norm_AVG-potencialna_foto_aktivnost'))
+#log2_tabela4
+```
+
+```{r}
+z_tabela444<-(tabela444$norm_MP - mean(tabela444$norm_MP)) / sd(tabela444$norm_MP)
+#z_tabela444
+```
+
+Preverjanje normalnosti razporeditve transformiranih podatkov z Shapiro testom za logaritemsko transformacijo z osnovo 10. Po transformaciji ima samo en parameter normalno razporeditev.
+```{r}
+u<-c(
+shapiro.test(log10_tabela4$norm_MP),
+shapiro.test(log10_tabela4$norm_MDA_P),
+shapiro.test(log10_tabela4$norm_MK),
+shapiro.test(log10_tabela4$norm_MDA_K),
+shapiro.test(log10_tabela4$Chla_Qorm),
+shapiro.test(log10_tabela4$Chlb_norm),
+shapiro.test(log10_tabela4$Sk_Chl_norm),
+shapiro.test(log10_tabela4$Transp_norm),
+shapiro.test(log10_tabela4$norm_AVG_dejanska_foto_aktivnost),
+shapiro.test(log10_tabela4[,'norm_AVG-potencialna_foto_aktivnost'])) #shapiro teste za vsak merjen parameter spravim v vektor, shrani se kot 'list'
+
+u<-as.data.frame(u) #u spremenim v data.frame
+
+p<-u[seq(2, length(u),by=4)] #shapiro test prikaze tudi W in imena parametrov, v vektor p spravim samo p vrednosti
+pp<-colnames(p) # v vektor pp spravim samo imena stolpcev z p vrednostmi iz p
+uu<-p>= 0.05 # v vektor uu preverim katere p vrednosti so vecje od 0.05, kar pomeni, da je razdelitev verjetno normalna
+uuu<-grep('TRUE',uu) #u uuu spravum samo tiste, ki so vecji od 0.05
+p[uuu] #in jih izpisem, vidim da je to p vrednosti 8
+
+u[c('data.name.8')] #poiscem katerim parametrom pripadajo slednje p vrednosti, to je sedaj samo norm_AVG_dejanska_foto_aktivnost, pri teh tem parametru naj bi bila rezporeditev normalna
+
+```
+
+
+Vizualizacija normalnosi razporeditve normiranih podatkov za vse izvedene transformacije, lepo se vidi, da ekstremne vrednosti ostanejo osamljene, medtem ko se srednje zgostijo.
+```{r} 
+par(mfrow=c(2,3))
+
+qqnorm(sqrt_tabela4$norm_MP,main = 'sqrt'); qqline(sqrt_tabela4$norm_MP)
+qqnorm(log_tabela4[,'norm_MP'],main = 'log'); qqline(log_tabela4$norm_MP)
+qqnorm(log10_tabela4[,'norm_MP'],main = 'log10'); qqline(log10_tabela4$norm_MP)
+qqnorm(log2_tabela4[,'norm_MP'],main = 'log2'); qqline(log2_tabela4$norm_MP)
+qqnorm(z_tabela444,main = 'z'); qqline(z_tabela444)
+```
+Preverjanje homogenosti varianc transformiranih podatkov, Barettov test se vedno vrne p-value < 2.2e-16, glede na ostale variance niso enake.
+```{r}
+# Bartlett Test of Homogeneity of Variances
+bartlett.test(norm_MP~Vrsta_Kon, data=log10_tabela4)
+
+# Figner-Killeen Test of Homogeneity of Variances
+fligner.test(norm_MP~Vrsta_Kon, data=log10_tabela4)
+
+#Brown-Forsyth Test of Homogeneity of Variances
+hov(norm_MP~Vrsta_Kon, data=log10_tabela4)
+
+
+#Levene Test of Homogeneity of Variances
+levene.test(log10_tabela4$norm_MP, log10_tabela4$Vrsta_Kon)
+```
+
+
+primerjava normalnosti standardnih napak mase poganjkov pred in po transformaciji log10, po transformaciji se izkaze, da so SE normalno razporejene.
+
+```{r}
+log10_tabela4SE <-aggregate(log10_tabela4[,2:11], by=list(tabela4$Vrsta_Kon),FUN=se)
+log10_tabela4SE<-log10_tabela4SE[match(row.names(imena),log10_tabela4SE$Group.1),]
+colnames(log10_tabela4SE)<- c(colnames(tabela))
+#log10_tabela4SE
+
+```
+
+
+```{r}
+shapiro.test(log10_tabela4SE$`AVG-masa-pog`)
+shapiro.test(tabelaSE$norm_MP)
+```
+
+
+```{r}
+par(mfrow=c(1,2))
+
+qqnorm(log10_tabela4SE$`AVG-masa-pog`,main = 'log10'); qqline(log10_tabela4SE$`AVG-masa-pog`)
+qqnorm(tabelaSE$norm_MP,main = 'netransformirano');qqline(tabelaSE$norm_MP)
+```
+
+
+#Multivariatna analiza
+
+
+Multivariatno analizo podatkov lahko prikazemo na vec nacinov.
+
+##Dendrogram
+
+Pri prikazu z dendrogramom so bolj podobni/povezani podatki povezani z krajso razdaljo, spodaj so trije razlicni nacini prikaza dendrograma, podatki v obliki `hc` izrisani z pomocjo `plot`
+```{r, include=FALSE}
+tabela5 <-aggregate(tabela44[,2:11], by=list(tabela44$Vrsta_Kon),FUN=mean) #zracunam povprecja podatkov od drugegega stolpca naprej (v prvem ni stevil)
+colnames(tabela5)[1]<-c('Vrsta_Kon')
+imena<-as.matrix(1:length(tabela5$Vrsta_Kon)) 
+row.names(imena)<-(c('El_50','El_100','El_200','Eu_50','Eu_100','Eu_200','Vu_50','Vu_100','Vu_200')) 
+tabela5<-tabela5[match(row.names(imena),tabela5$Vrsta_Kon),]
+rownames(tabela5)<-c('El_50','El_100','El_200','Eu_50','Eu_100','Eu_200','Vu_50','Vu_100','Vu_200') #spremenim imena vrstic, da ustrezajo vrsti in koncentraciji
+
+#tabela5
+```
+
+```{r, include=FALSE}
+library(ggplot2)
+library(ggdendro)
+library(ape)
+library(RColorBrewer)
+library(gplots)
+library(graphics)
+```
+
+
+```{r, fig.height=4, fig.width=12}
+hc = hclust(dist(tabela5))
+
+par(bg='#e9fff7',mfrow=c(1,3))
+
+plot(hc, col = "#7e0606", col.main = "#9c0a0a", col.lab = "#d00d0d", 
+    col.axis = "#d00d0d", lwd = 3, lty = 3, sub = "", hang = -1, axes = FALSE, main = 'dendrogram')
+
+plot(as.phylo(hc), type = "unrooted", col.main='#bfefff',main = 'dendrogram',col.main = '#9f79f2',tip.color = hsv(runif(100, 0.65, 
+    0.95), 1, 0.8, 0.7), edge.color = hsv(runif(10, 0.65, 0.75), 1, 1, 0.7), edge.width = runif(20, 
+    0.5, 3), use.edge.length = TRUE, cex = 1)
+
+plot(as.phylo(hc), type = "fan", tip.color = hsv(runif(15, 0.65, 
+    0.95), 1, 1, 0.7), edge.color = hsv(runif(10, 0.65, 0.75), 1, 1, 0.7), edge.width = runif(20, 
+    0.5, 3), use.edge.length = TRUE, col = "#580606",cex = 1.5) 
+```
+
+
+
+```{r, include=FALSE}
+tabela5$Vrsta_Kon<-NULL
+tabela55<-as.matrix(tabela5)
+
+mypalette<-brewer.pal(9,'PuBuGn')
+mypalette<-as.matrix(mypalette)
+mypalette2<-c('#ccffcc','#ccffff','#ccccff','#ffcccc','#ffffcc')
+mypalette3<-c('#000000','#141917','#29332f','#3e4c47','#52665e','#677f76','#7c998e','#90b2a5','#a5ccbd','#bae5d5','#cfffed')
+mypalette4<-c('#ff748c','#ff8da1','#ffa7b6','#ffc0cb','#ffdae0','#fff3f5','#f3fffd','#dafff8','#c0fff4','#a7fff0','#8dffeb','#74ffe7')
+mypalette5<-c('#ccffcc','#ccffff','#ccccff','#ffcccc','#ffffcc','#f5dbdb','#f1e5ab','#dcf9c3','#c9f3ef','#dfccfb')
+mypalette6<-c('#cdf279','#d6f590','#def7a8','#e7f9bf','#f0fbd6','#f8fdee','#f3eefd','#e2d6fb','#d1bff9','#c0a8f7','#af90f5','#9f79f2')
+mypalette7<-c('#d00d0d','#bb0b0b','#a60a0a','#910909','#7c0707','#680606','#530505','#3e0303','#290202','#140101','#000000')
+```
+
+##Heatmap
+
+Na heatmap so bolj podobni podatki prikazani z podobno barvo, dodatno je povezanost podatkov v stolpcih in vrsticah prikazana z dendrogrami. Spodnja heatmapa sta izrisana z `heatmap` in `heatmap.2`. Pri drugem je na legendi prikazana tudi frekvenca s katero se posamezna barva pojavi.
+
+
+```{r, echo=FALSE}
+heatmap(tabela55, col=mypalette4,cexRow = 1.2, cexCol = 1,srt=45)
+```
+
+
+```{r, echo=FALSE, fig.height=6, fig.width=12}
+heatmap.2(tabela55, col=mypalette,trace = 'none', cexRow = 0.8, cexCol = 0.9,density.info = NULL, denscol = c('#96418a'),key.title='barvni kljuc in histogram' , srtCol = 45)
+```
+
+```{r, include=FALSE}
+library(Hmisc)
+library(corrgram)
+```
+
+##Correlogram
+
+Z correlogramom lahko graficno prikazem korelacijo (linearno odvisnost) med skupinami. Najprej sem z `rcorr` dobil rezultate za Pearsonovo in Spearmanovo korelacijo. Rezultat 1 pomeni pozitivno, 0 linearno, -1 pa negativno korelacijo med podatki. Rezultatov `rcorr` ne izpisem, saj je na spodnjih dveh slikah to prikazano malo lepse z `corrgram`. Izkaze se, da med merjenimi parametri vecinoma korelacij, razen mocna pozitivna med delezem vsakega posameznega klorofila in delezem skupnih klorofilov, kar je za pricakovati, saj so je podatek za skupne klorofile sestavljen iz podatkov za klorofila a in b. Negativno korelacijo lahko opazimo med transpiracijo in dejansko fotokemicno ucinkovitostjo, skoraj linearno, brez korelacije, pa so podatki za maso korenin in delezem klorofila a, kar ne preseneca, saj v koreninah ni klorofila.
+
+
+```{r, eval=FALSE, include=TRUE}
+rcorr(tabela55, type="pearson")
+
+rcorr(tabela55, type="spearman")
+```
+
+```{r, fig.height=6, fig.width=6}
+col.corrgram <- function(ncol){   
+  colorRampPalette(c(mypalette7))(ncol)} 
+par(bg='#f3fcff')
+corrgram(tabela55, order=TRUE, lower.panel=panel.ellipse,
+  upper.panel=panel.cor, text.panel=panel.txt,
+  main=" ", col.regions = col.corrgram, gap = 0.15, cex.labels = 1, label.srt = 45)
+```
+
+```{r, fig.height=6, fig.width=6}
+col.corrgram <- function(ncol){   
+  colorRampPalette(c(mypalette6))(ncol)} 
+par(bg='#f3fcff')
+corrgram(tabela55, order=TRUE, lower.panel=panel.shade,
+  upper.panel=panel.pie, text.panel=panel.txt,
+  main=" ", col.regions = col.corrgram, label.srt = 0, row1attop = FALSE, gap = 0.1)
+```
+
+##Analiza glavnih komponent
+
+Z analizo glavnih komponent semerjene spremenljivke z ortologno transformacijo pretvorijo v glavne komponente ([PCA]https://en.wikipedia.org/wiki/Principal_component_analysis), razporejene so tako, da ima prva najvecjo varianco in tako prispeva najvec variabilnosti podatkom. 
+
+PCA dobim z `princomp`, jih povzamem z `summary` in kot v obliki histograma ali crtnega grafa izrisem z `screenplot`, lepo se vidi, da so glavne komponente razporejene po padajocem delezu variance, ki jo prispevajo.
+
+```{r, include=FALSE}
+tabela44$Vrsta_Kon<-NULL
+
+pca <- princomp(tabela44,cor=TRUE)
+pca
+str(pca)
+pca$loadings
+
+my.scores <- as.matrix(tabela44)%*%t(pca$loadings)
+pca$scores
+mean(pca$scores[,2])
+sd(pca$scores)
+#pairs(cbind(my.scores,pca$scores))
+```
+
+```{r}
+summary(pca)
+```
+
+```{r, echo=FALSE}
+par(mfrow=c(1,2))
+
+screeplot(pca, type = 'lines')
+screeplot(pca, type = 'barplot')
+```
+
+
+```{r, include=FALSE}
+sorte<-tabela444$vrst
+sorte<-as.data.frame(sorte)
+```
+
+Z `plot` izrisem rezultate pca glede na komponenti 1 in 2, ki prispevata najvec, krizci so Vu, krozci El in trikotniki Eu.
+
+```{r}
+plot(pca$scores,col=sorte[,1],lwd=1,asp=1, cex=2, pch=as.numeric(c(sorte[,1])))
+```
+
+Z `biplot` graficno prikazem koliko vsak merjen parameter prispeva k variabilnosti podatkov, zaradi gostote puscic se na zalost ne da razbrati dobro.
+
+```{r}
+biplot(pca)
+```
+
+# Linearna diskriminacijska analiza
+
+Z linearno diskriminacijsko analizo se podatki pogledajo tako, da so razlike med njimi najvecje, poiscejo se komponente, ki pojasnujejo najvec variabilnosti med skupinami in se na podlagi tega locijo v naprej dolocene skupine. Na grafu vidim, da se locijo zelo uspesno.
+
+```{r, include=FALSE}
+library(MASS)
+```
+
+```{r, include=FALSE}
+sorte2<-sorte[-c(1:3,13:15,25:27),] #manualno odstranim kontrole
+sorte2<-as.data.frame(sorte2)
+
+lda4 <- lda(sorte2[,1]~as.matrix(tabela44))
+names(lda4)
+l <- predict(lda4)
+lda4$scaling
+names(l)
+round(l$posterior,3)
+```
+
+```{r, echo=FALSE}
+plot(lda4,col=as.numeric(c(sorte2[,1])),cex=1)
+```
+
+# Linearni model
+
+Z sledecimi vrsticami dobim kar nekaj podatkov, za vse ne vem kaj pomenijo, za tiste, ki pa, se mi zdijo kar uporabni.
+
+```{r}
+lm1 <- lm(tabela4444~0+factor(tabela444[,12])+factor(tabela444[,11]))
+lm1
+summary(lm1)
+```
+
+```{r}
+fit <- lm(norm_MP ~ vrsta * kon, data=tabela444)
+summary(fit) 
+coefficients(fit) 
+confint(fit, level=0.95)  
+fitted(fit) # predvidene vrednosti
+residuals(fit) 
+anova(fit) 
+vcov(fit) 
+influence(fit) 
+```
+
+Vpliv vrste in koncentracije na tezo poganjka; 
+```{r}
+fit<- lm(norm_MP~kon*vrsta,tabela444[tabela444$kon!="K",] )
+fit
+predict(fit)
+#aggregate(norm_MP~vrsta, FUN=mean) #povzetek nardi, povpreÄja
+anova(fit)
+residuals(fit)
+```
+
+```{r, eval=FALSE, include=FALSE}
+plot(fit) 
+```
